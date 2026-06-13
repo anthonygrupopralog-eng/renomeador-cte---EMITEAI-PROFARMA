@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Renomeador CT-e / MDF-e</title>
+
+<style>
+body { font-family: Arial; padding: 20px; }
+
+.area {
+    border: 2px dashed #999;
+    padding: 30px;
+    margin-bottom: 20px;
+    text-align: center;
+    cursor: pointer;
+}
+.area:hover { background: #f5f5f5; }
+
+.container {
+    display: flex;
+    gap: 40px;
+}
+
+.box { width: 50%; }
+
+h3 {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 5px;
+}
+</style>
+</head>
+<body>
+
+<h2>Renomeador de Documentos</h2>
+
+<div class="area" id="dropCTE">📄 Arraste ou clique (CT-e)</div>
+<div class="area" id="dropMDFE">🚚 Arraste ou clique (MDF-e)</div>
+
+<input type="file" id="inputCTE" multiple accept="application/pdf" webkitdirectory hidden>
+<input type="file" id="inputMDFE" multiple accept="application/pdf" webkitdirectory hidden>
+
+<br>
+
+<button onclick="baixarZip('CT-e')">ZIP CT-e</button>
+<button onclick="baixarZip('MDF-e')">ZIP MDF-e</button>
+<button onclick="juntarPorMotorista()">Juntar CT-e</button>
+<button onclick="limparTudo()">Limpar</button>
+
+<br><br>
+
+<div class="container">
+
+<div class="box">
+    <h3>📄 CT-e (<span id="contadorCTE">0</span>)</h3>
+    <div id="listaCTE"></div>
+</div>
+
+<div class="box">
+    <h3>🚚 MDF-e (<span id="contadorMDFE">0</span>)</h3>
+    <div id="listaMDFE"></div>
+</div>
+
+</div>
+
+<!-- ✅ SCRIPTS CORRETOS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+
+<script>
+// ✅ FIX PDF.JS
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+let arquivos = { "CT-e": [], "MDF-e": [] };
+let nomesUsados = {};
+
+function formatarData() {
+    return new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+}
+
+// ================= AREA =================
+function configurarArea(areaId, inputId, tipo) {
+
+    const area = document.getElementById(areaId);
+    const input = document.getElementById(inputId);
+
+    area.addEventListener("dragover", e => {
+        e.preventDefault();
+        area.style.background = "#e0e0e0";
+    });
+
+    area.addEventListener("dragleave", () => {
+        area.style.background = "";
+    });
+
+    area.addEventListener("drop", e => {
+        e.preventDefault();
+        area.style.background = "";
+        processarArquivos(e.dataTransfer.files, tipo);
+    });
+
+    area.addEventListener("click", () => input.click());
+
+    input.addEventListener("change", () => {
+        processarArquivos(input.files, tipo);
+    });
+}
+
+configurarArea("dropCTE", "inputCTE", "CT-e");
+configurarArea("dropMDFE", "inputMDFE", "MDF-e");
+
+
+// ================= PROCESSAMENTO =================
+async function processarArquivos(files, tipo) {
+
+    const lista = document.getElementById(tipo === "CT-e" ? "listaCTE" : "listaMDFE");
+    const contador = document.getElementById(tipo === "CT-e" ? "contadorCTE" : "contadorMDFE");
+
+    for (let file of files) {
+
+        if (file.type !== "application/pdf") continue;
+
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+
+        let texto = "";
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const pagina = await pdf.getPage(i);
+            const conteudo = await pagina.getTextContent();
+            texto += conteudo.items.map(i => i.str).join(" ");
+        }
+
+        texto = texto.replace(/\s+/g, ' ').toUpperCase();
+
+        let numero = 0;
+        let motorista = "SEM_MOTORISTA";
+        let placa = "SEM_PLACA";
+        let data = formatarData();
+
+        // ===== CT-e =====
+        if (tipo === "CT-e") {
+
+            let n = texto.match(/S[ÉE]RIE\s+\d+\s+(\d+)/) || texto.match(/N[ÚU]MERO\s*(\d+)/);
+            if (n) numero = parseInt(n[1]);
+
+            let d = texto.match(/\d{2}\/\d{2}\/\d{4}/);
+            if (d) data = d[0].replace(/\//g, '-');
+
+            let m = texto.match(/(MOTORISTA|CONDUTOR)\s(.+?)(CPF|CNH)/);
+            if (m) motorista = m[2].trim().replace(/\s+/g, "_");
+
+            let p = texto.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/);
+            if (p) placa = p[0];
+
+            let nomeCurto = motorista.split("_").slice(0,2).join(" ");
+
+            let base = `${data} CT-e ${numero} ${nomeCurto} ${placa}`;
+
+            let count = (nomesUsados[base] || 0) + 1;
+            nomesUsados[base] = count;
+
+            let nomeFinal = count > 1 ? `${base} (${count}).pdf` : `${base}.pdf`;
+
+            arquivos["CT-e"].push({ nome: nomeFinal, conteudo: buffer, motorista: nomeCurto, numero, placa, data });
+
+            lista.appendChild(criarItem(nomeFinal));
+        }
+
+        // ===== MDF-e =====
+        if (tipo === "MDF-e") {
+
+            let m = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}\s+([A-Z\s]+)/);
+            if (m) motorista = m[1].trim().replace(/\s+/g, "_");
+
+            let placas = [...texto.matchAll(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/g)].map(x => x[0]);
+
+            if (placas.length >= 2) placa = placas[1];
+            else if (placas.length === 1) placa = placas[0];
+
+            let nomeCurto = motorista.split("_").slice(0,2).join(" ");
+
+            let base = `DAMDFE ${nomeCurto} ${placa}`;
+
+            let count = (nomesUsados[base] || 0) + 1;
+            nomesUsados[base] = count;
+
+            let nomeFinal = count > 1 ? `${base} (${count}).pdf` : `${base}.pdf`;
+
+            arquivos["MDF-e"].push({ nome: nomeFinal, conteudo: buffer });
+
+            lista.appendChild(criarItem(nomeFinal));
+        }
+    }
+
+    contador.innerText = arquivos[tipo].length;
+}
+
+function criarItem(texto) {
+    const div = document.createElement("div");
+    div.innerText = texto;
+    return div;
+}
+
+
+// ================= ZIP =================
+async function baixarZip(tipo) {
+
+    const zip = new JSZip();
+    arquivos[tipo].forEach(a => zip.file(a.nome, a.conteudo));
+
+    const blob = await zip.generateAsync({ type: "blob" });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${tipo}_${formatarData()}.zip`;
+    link.click();
+}
+
+
+// ================= JUNTAR =================
+async function juntarPorMotorista() {
+
+    const { PDFDocument } = PDFLib;
+    let grupos = {};
+
+    arquivos["CT-e"].forEach(a => {
+        if (!grupos[a.motorista]) grupos[a.motorista] = [];
+        grupos[a.motorista].push(a);
+    });
+
+    for (let motorista in grupos) {
+
+        let lista = grupos[motorista].filter(a => a.numero > 0);
+        if (lista.length === 0) continue;
+
+        lista.sort((a,b)=>a.numero-b.numero);
+
+        let primeiro = lista[0].numero;
+        let ultimo = lista[lista.length-1].numero;
+        let data = lista[0].data;
+        let placa = lista.find(a => a.placa !== "SEM_PLACA")?.placa || "SEM_PLACA";
+
+        const pdfFinal = await PDFDocument.create();
+
+        for (let arq of lista) {
+            const pdf = await PDFDocument.load(arq.conteudo);
+            const paginas = await pdfFinal.copyPages(pdf, pdf.getPageIndices());
+            paginas.forEach(p => pdfFinal.addPage(p));
+        }
+
+        const bytes = await pdfFinal.save();
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([bytes]));
+
+        link.download = `${data} CT-e ${primeiro}-${ultimo} ${motorista} ${placa}.pdf`;
+
+        link.click();
+    }
+}
+
+
+// ================= LIMPAR =================
+function limparTudo() {
+    arquivos = { "CT-e": [], "MDF-e": [] };
+    nomesUsados = {};
+
+    document.getElementById("listaCTE").innerHTML = "";
+    document.getElementById("listaMDFE").innerHTML = "";
+    document.getElementById("contadorCTE").innerText = 0;
+    document.getElementById("contadorMDFE").innerText = 0;
+}
+</script>
+
+</body>
+</html>

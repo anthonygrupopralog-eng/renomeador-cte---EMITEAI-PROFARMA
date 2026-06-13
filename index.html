@@ -36,8 +36,9 @@ h3 {
 <div class="area" id="dropCTE">📄 Arraste ou clique (CT-e)</div>
 <div class="area" id="dropMDFE">🚚 Arraste ou clique (MDF-e)</div>
 
-<!-- arquivos --> <input type="file" id="inputCTE" multiple accept="application/pdf" hidden>  <!-- pasta --> <input type="file" id="inputCTE_PASTA" webkitdirectory hidden>
-<input type="file" id="inputMDFE" multiple accept="application/pdf" hidden> <input type="file" id="inputMDFE_PASTA" webkitdirectory hidden> ``
+<!-- ✅ IMPORTAR ARQUIVOS -->
+<input type="file" id="inputCTE" multiple accept="application/pdf" hidden>
+<input type="file" id="inputMDFE" multiple accept="application/pdf" hidden>
 
 <br>
 
@@ -68,9 +69,9 @@ h3 {
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 
 <script>
-// ✅ FIX PDF.JS
+// ✅ CONFIG PDF
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
 
 let arquivos = { "CT-e": [], "MDF-e": [] };
 let nomesUsados = {};
@@ -79,22 +80,18 @@ function formatarData() {
     return new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
 }
 
-// ================= AREA =================
-function configurarArea(areaId, inputArquivoId, inputPastaId, tipo) {
+// ✅ ÁREA DRAG + CLICK
+function configurarArea(areaId, inputId, tipo) {
 
     const area = document.getElementById(areaId);
-    const inputArquivo = document.getElementById(inputArquivoId);
-    const inputPasta = document.getElementById(inputPastaId);
+    const input = document.getElementById(inputId);
 
-    // DRAG
     area.addEventListener("dragover", e => {
         e.preventDefault();
         area.style.background = "#e0e0e0";
     });
 
-    area.addEventListener("dragleave", () => {
-        area.style.background = "";
-    });
+    area.addEventListener("dragleave", () => area.style.background = "");
 
     area.addEventListener("drop", e => {
         e.preventDefault();
@@ -102,34 +99,18 @@ function configurarArea(areaId, inputArquivoId, inputPastaId, tipo) {
         processarArquivos(e.dataTransfer.files, tipo);
     });
 
-    // CLICK = ESCOLHA INTELIGENTE
-    area.addEventListener("click", () => {
+    area.addEventListener("click", () => input.click());
 
-        const escolha = confirm(
-            "OK = Selecionar PASTA\nCancelar = Selecionar ARQUIVOS"
-        );
-
-        if (escolha) {
-            inputPasta.click();
-        } else {
-            inputArquivo.click();
-        }
-    });
-
-    inputArquivo.addEventListener("change", () => {
-        processarArquivos(inputArquivo.files, tipo);
-    });
-
-    inputPasta.addEventListener("change", () => {
-        processarArquivos(inputPasta.files, tipo);
+    input.addEventListener("change", () => {
+        processarArquivos(input.files, tipo);
     });
 }
 
-configurarArea("dropCTE", "inputCTE", "inputCTE_PASTA", "CT-e");
-configurarArea("dropMDFE", "inputMDFE", "inputMDFE_PASTA", "MDF-e");
+configurarArea("dropCTE", "inputCTE", "CT-e");
+configurarArea("dropMDFE", "inputMDFE", "MDF-e");
 
 
-// ================= PROCESSAMENTO =================
+// ✅ PROCESSAMENTO
 async function processarArquivos(files, tipo) {
 
     const lista = document.getElementById(tipo === "CT-e" ? "listaCTE" : "listaMDFE");
@@ -157,7 +138,7 @@ async function processarArquivos(files, tipo) {
         let placa = "SEM_PLACA";
         let data = formatarData();
 
-        // ===== CT-e =====
+        // ✅ CT-e
         if (tipo === "CT-e") {
 
             let n = texto.match(/S[ÉE]RIE\s+\d+\s+(\d+)/) || texto.match(/N[ÚU]MERO\s*(\d+)/);
@@ -166,7 +147,7 @@ async function processarArquivos(files, tipo) {
             let d = texto.match(/\d{2}\/\d{2}\/\d{4}/);
             if (d) data = d[0].replace(/\//g, '-');
 
-            let m = texto.match(/(MOTORISTA|CONDUTOR)\s(.+?)(CPF|CNH)/);
+et m = texto.match(/(MOTORISTA|CONDUTOR)\s(.+?)(CPF|CNH)/);
             if (m) motorista = m[2].trim().replace(/\s+/g, "_");
 
             let p = texto.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/);
@@ -181,32 +162,27 @@ async function processarArquivos(files, tipo) {
 
             let nomeFinal = count > 1 ? `${base} (${count}).pdf` : `${base}.pdf`;
 
-            arquivos["CT-e"].push({ nome: nomeFinal, conteudo: buffer, motorista: nomeCurto, numero, placa, data });
+            arquivos["CT-e"].push({
+                nome: nomeFinal,
+                conteudo: buffer,
+                motorista: nomeCurto,
+                numero,
+                placa,
+                data
+            });
 
             lista.appendChild(criarItem(nomeFinal));
         }
 
-        // ===== MDF-e =====
+        // ✅ MDF-e
         if (tipo === "MDF-e") {
 
-            let m = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}\s+([A-Z\s]+)/);
-            if (m) motorista = m[1].trim().replace(/\s+/g, "_");
+            let nomeFinal = file.name;
 
-            let placas = [...texto.matchAll(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/g)].map(x => x[0]);
-
-            if (placas.length >= 2) placa = placas[1];
-            else if (placas.length === 1) placa = placas[0];
-
-            let nomeCurto = motorista.split("_").slice(0,2).join(" ");
-
-            let base = `DAMDFE ${nomeCurto} ${placa}`;
-
-            let count = (nomesUsados[base] || 0) + 1;
-            nomesUsados[base] = count;
-
-            let nomeFinal = count > 1 ? `${base} (${count}).pdf` : `${base}.pdf`;
-
-            arquivos["MDF-e"].push({ nome: nomeFinal, conteudo: buffer });
+            arquivos["MDF-e"].push({
+                nome: nomeFinal,
+                conteudo: buffer
+            });
 
             lista.appendChild(criarItem(nomeFinal));
         }
@@ -215,14 +191,14 @@ async function processarArquivos(files, tipo) {
     contador.innerText = arquivos[tipo].length;
 }
 
-function criarItem(texto) {
-    const div = document.createElement("div");
-    div.innerText = texto;
-    return div;
+function criarItem(t) {
+    const d = document.createElement("div");
+    d.innerText = t;
+    return d;
 }
 
 
-// ================= ZIP =================
+// ✅ ZIP
 async function baixarZip(tipo) {
 
     const zip = new JSZip();
@@ -233,11 +209,12 @@ async function baixarZip(tipo) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `${tipo}_${formatarData()}.zip`;
+
     link.click();
 }
 
 
-// ================= JUNTAR =================
+// ✅ JUNTAR
 async function juntarPorMotorista() {
 
     const { PDFDocument } = PDFLib;
@@ -253,10 +230,10 @@ async function juntarPorMotorista() {
         let lista = grupos[motorista].filter(a => a.numero > 0);
         if (lista.length === 0) continue;
 
-        lista.sort((a,b)=>a.numero-b.numero);
+        lista.sort((a,b) => a.numero - b.numero);
 
         let primeiro = lista[0].numero;
-        let ultimo = lista[lista.length-1].numero;
+        let ultimo = lista[lista.length - 1].numero;
         let data = lista[0].data;
         let placa = lista.find(a => a.placa !== "SEM_PLACA")?.placa || "SEM_PLACA";
 
@@ -280,7 +257,7 @@ async function juntarPorMotorista() {
 }
 
 
-// ================= LIMPAR =================
+// ✅ LIMPAR
 function limparTudo() {
     arquivos = { "CT-e": [], "MDF-e": [] };
     nomesUsados = {};

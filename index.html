@@ -36,8 +36,8 @@ h3 {
 <div class="area" id="dropCTE">📄 Arraste ou clique (CT-e)</div>
 <div class="area" id="dropMDFE">🚚 Arraste ou clique (MDF-e)</div>
 
-<input type="file" id="inputCTE" multiple accept="application/pdf" webkitdirectory hidden>
-<input type="file" id="inputMDFE" multiple accept="application/pdf" webkitdirectory hidden>
+<!-- arquivos --> <input type="file" id="inputCTE" multiple accept="application/pdf" hidden>  <!-- pasta --> <input type="file" id="inputCTE_PASTA" webkitdirectory hidden>
+<input type="file" id="inputMDFE" multiple accept="application/pdf" hidden> <input type="file" id="inputMDFE_PASTA" webkitdirectory hidden> ``
 
 <br>
 
@@ -80,11 +80,13 @@ function formatarData() {
 }
 
 // ================= AREA =================
-function configurarArea(areaId, inputId, tipo) {
+function configurarArea(areaId, inputArquivoId, inputPastaId, tipo) {
 
     const area = document.getElementById(areaId);
-    const input = document.getElementById(inputId);
+    const inputArquivo = document.getElementById(inputArquivoId);
+    const inputPasta = document.getElementById(inputPastaId);
 
+    // DRAG
     area.addEventListener("dragover", e => {
         e.preventDefault();
         area.style.background = "#e0e0e0";
@@ -100,15 +102,31 @@ function configurarArea(areaId, inputId, tipo) {
         processarArquivos(e.dataTransfer.files, tipo);
     });
 
-    area.addEventListener("click", () => input.click());
+    // CLICK = ESCOLHA INTELIGENTE
+    area.addEventListener("click", () => {
 
-    input.addEventListener("change", () => {
-        processarArquivos(input.files, tipo);
+        const escolha = confirm(
+            "OK = Selecionar PASTA\nCancelar = Selecionar ARQUIVOS"
+        );
+
+        if (escolha) {
+            inputPasta.click();
+        } else {
+            inputArquivo.click();
+        }
+    });
+
+    inputArquivo.addEventListener("change", () => {
+        processarArquivos(inputArquivo.files, tipo);
+    });
+
+    inputPasta.addEventListener("change", () => {
+        processarArquivos(inputPasta.files, tipo);
     });
 }
 
-configurarArea("dropCTE", "inputCTE", "CT-e");
-configurarArea("dropMDFE", "inputMDFE", "MDF-e");
+configurarArea("dropCTE", "inputCTE", "inputCTE_PASTA", "CT-e");
+configurarArea("dropMDFE", "inputMDFE", "inputMDFE_PASTA", "MDF-e");
 
 
 // ================= PROCESSAMENTO =================
